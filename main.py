@@ -10,11 +10,10 @@ SITES = {
 }
 
 
-BOT_TOKEN = ["8643339521:AAG0hTdVt6vYHqLurxCzXjJQ-fyeKURhY_Y"]
-CHAT_ID = ["6382850126"]
+BOT_TOKEN ="8735006573:AAGacSF8BTuTPvVpO9P2hmOqos93XBzH3GY"]
+CHAT_ID =[" "]
 
 LAST = "last_notice.json"
-
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
@@ -22,6 +21,7 @@ HEADERS = {
 
 
 def load():
+
     if os.path.exists(LAST):
         with open(LAST, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -29,7 +29,9 @@ def load():
     return {}
 
 
+
 def save(data):
+
     with open(LAST, "w", encoding="utf-8") as f:
         json.dump(
             data,
@@ -39,11 +41,12 @@ def save(data):
         )
 
 
+
 def telegram(message):
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    response = requests.post(
+    r = requests.post(
         url,
         data={
             "chat_id": CHAT_ID,
@@ -52,7 +55,8 @@ def telegram(message):
         timeout=30
     )
 
-    print(response.text)
+    print(r.json())
+
 
 
 def latest(url):
@@ -71,12 +75,43 @@ def latest(url):
     )
 
 
-    # সব PDF লিংক খুঁজবে
-    for a in soup.find_all("a", href=True):
+    # Notice list থেকে প্রথম PDF খোঁজা
+    for row in soup.find_all("tr"):
 
-        href = a["href"]
+        link = row.find("a", href=True)
 
-        title = a.get_text(
+        if not link:
+            continue
+
+
+        title = row.get_text(
+            " ",
+            strip=True
+        )
+
+
+        href = link["href"]
+
+
+        # Circular বাদ
+        if "circular" in title.lower():
+            continue
+
+
+        if ".pdf" in href.lower():
+
+            return {
+                "title": title,
+                "link": urljoin(url, href)
+            }
+
+
+    # fallback: যদি table না থাকে
+    for link in soup.find_all("a", href=True):
+
+        href = link["href"]
+
+        title = link.get_text(
             " ",
             strip=True
         )
@@ -84,17 +119,12 @@ def latest(url):
 
         if ".pdf" in href.lower():
 
-            pdf = urljoin(
-                url,
-                href
-            )
-
-            if not title:
-                title = "SHED নতুন নোটিশ"
+            if "circular" in title.lower():
+                continue
 
             return {
-                "title": title,
-                "link": pdf
+                "title": title or "SHED Notice",
+                "link": urljoin(url, href)
             }
 
 
@@ -105,6 +135,7 @@ def latest(url):
 def main():
 
     print("SHED Notice Checker Started")
+
 
     last = load()
 
@@ -121,21 +152,17 @@ def main():
 
 
 
-        old = last.get(name)
+        if last.get(name) != notice["link"]:
 
 
-        if old != notice["link"]:
-
-
-            msg = (
-                f"🔔 নতুন নোটিশ ({name})\n\n"
+            message = (
+                f"🔔 নতুন Notice ({name})\n\n"
                 f"📌 {notice['title']}\n\n"
                 f"🔗 {notice['link']}"
             )
 
 
-            telegram(msg)
-
+            telegram(message)
 
             last[name] = notice["link"]
 
