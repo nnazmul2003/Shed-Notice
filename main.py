@@ -10,8 +10,8 @@ SITES = {
 }
 
 
-BOT_TOKEN = os.environ["8735006573:AAGacSF8BTuTPvVpO9P2hmOqos93XBzH3GY"]
-CHAT_ID = os.environ["6382850126"]
+BOT_TOKEN = ["8735006573:AAGacSF8BTuTPvVpO9P2hmOqos93XBzH3GY"]
+CHAT_ID = ["6382850126"]
 
 LAST = "last_notice.json"
 
