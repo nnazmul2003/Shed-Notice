@@ -15,9 +15,7 @@ SITES = {
 BOT_TOKEN = "8735006573:AAGacSF8BTuTPvVpO9P2hmOqos93XBzH3GY"
 CHAT_ID = "6382850126"
 
-
 LAST = "last_notice.json"
-
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
@@ -28,12 +26,7 @@ HEADERS = {
 def load():
 
     if os.path.exists(LAST):
-
-        with open(
-            LAST,
-            "r",
-            encoding="utf-8"
-        ) as f:
+        with open(LAST, "r", encoding="utf-8") as f:
             return json.load(f)
 
     return {}
@@ -42,12 +35,7 @@ def load():
 
 def save(data):
 
-    with open(
-        LAST,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
+    with open(LAST, "w", encoding="utf-8") as f:
         json.dump(
             data,
             f,
@@ -59,11 +47,7 @@ def save(data):
 
 def telegram(message):
 
-    url = (
-        f"https://api.telegram.org/"
-        f"bot{BOT_TOKEN}/sendMessage"
-    )
-
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
     r = requests.post(
         url,
@@ -74,32 +58,29 @@ def telegram(message):
         timeout=30
     )
 
-
     print(r.json())
 
 
 
-def get_date(text):
+def extract_date(text):
 
     dates = re.findall(
         r'(\d{1,2}[-/]\d{1,2}[-/]\d{4})',
         text
     )
 
-    if not dates:
-        return None
+    for d in dates:
 
+        try:
+            return datetime.strptime(
+                d.replace("/", "-"),
+                "%d-%m-%Y"
+            )
 
-    try:
+        except:
+            pass
 
-        return datetime.strptime(
-            dates[0].replace("/", "-"),
-            "%d-%m-%Y"
-        )
-
-    except:
-
-        return None
+    return None
 
 
 
@@ -112,7 +93,6 @@ def latest(url):
     )
 
     r.raise_for_status()
-
 
     soup = BeautifulSoup(
         r.text,
@@ -142,54 +122,42 @@ def latest(url):
             continue
 
 
-        title = row.get_text(
+        text = row.get_text(
             " ",
             strip=True
         )
 
 
-        text = title.lower()
+        lower = text.lower()
 
 
-
-        # শুধুমাত্র Notice
-        if (
-            "notice" not in text
-            and
-            "নোটিশ" not in text
-        ):
-            continue
-
-
-
-        # Circular/Notification বাদ
-        bad_words = [
+        # Circular বাদ
+        bad = [
             "circular",
             "notification",
-            "পরিপত্র",
-            "বিজ্ঞপ্তি"
+            "পরিপত্র"
         ]
 
 
         if any(
-            word in text
-            for word in bad_words
+            x in lower
+            for x in bad
         ):
             continue
 
 
 
-        date = get_date(title)
+        date = extract_date(text)
 
 
-        if not date:
+        if date is None:
             continue
 
 
 
         notices.append({
 
-            "title": title,
+            "title": text,
 
             "link": urljoin(
                 url,
@@ -202,13 +170,59 @@ def latest(url):
 
 
 
+    # fallback
     if not notices:
 
+        for a in soup.find_all(
+            "a",
+            href=True
+        ):
+
+            href = a["href"]
+
+
+            if ".pdf" not in href.lower():
+                continue
+
+
+            title = a.get_text(
+                " ",
+                strip=True
+            )
+
+
+            lower = title.lower()
+
+
+            if "circular" in lower:
+                continue
+
+
+            date = extract_date(title)
+
+
+            if date:
+
+                notices.append({
+
+                    "title": title,
+
+                    "link": urljoin(
+                        url,
+                        href
+                    ),
+
+                    "date": date
+
+                })
+
+
+
+    if not notices:
         return None
 
 
 
-    # নতুন তারিখ আগে
     notices.sort(
         key=lambda x:x["date"],
         reverse=True
@@ -241,12 +255,10 @@ def main():
 
     for name,url in SITES.items():
 
-
         notice = latest(url)
 
 
-
-        if not notice:
+        if notice is None:
 
             print(
                 "No Notice Found"
@@ -259,18 +271,14 @@ def main():
         if last.get(name) != notice["link"]:
 
 
-            msg = (
-
+            message = (
                 f"🔔 New Notice ({name})\n\n"
-
                 f"📌 {notice['title']}\n\n"
-
                 f"🔗 {notice['link']}"
-
             )
 
 
-            telegram(msg)
+            telegram(message)
 
 
             last[name] = notice["link"]
@@ -288,10 +296,10 @@ def main():
             )
 
 
+
     save(last)
 
 
 
 if __name__ == "__main__":
-
     main()
