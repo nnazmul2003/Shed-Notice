@@ -103,118 +103,52 @@ def latest(url):
     notices = []
 
 
-    for row in soup.find_all("tr"):
+    for a in soup.find_all("a", href=True):
 
-        link = row.find(
-            "a",
-            href=True
-        )
-
-
-        if not link:
-            continue
-
-
-        href = link["href"]
-
+        href = a["href"]
 
         if ".pdf" not in href.lower():
             continue
 
 
-        text = row.get_text(
+        title = a.get_text(
             " ",
             strip=True
         )
 
 
-        lower = text.lower()
+        # parent row থেকে text নেওয়া
+        parent = a.find_parent("tr")
+
+        if parent:
+            title = parent.get_text(
+                " ",
+                strip=True
+            )
+
+
+        lower = title.lower()
 
 
         # Circular বাদ
-        bad = [
+        if any(x in lower for x in [
             "circular",
-            "notification",
             "পরিপত্র"
-        ]
-
-
-        if any(
-            x in lower
-            for x in bad
-        ):
-            continue
-
-
-
-        date = extract_date(text)
-
-
-        if date is None:
+        ]):
             continue
 
 
 
         notices.append({
 
-            "title": text,
+            "title": title or "SHED Notice",
 
             "link": urljoin(
                 url,
                 href
-            ),
-
-            "date": date
-
-        })
-
-
-
-    # fallback
-    if not notices:
-
-        for a in soup.find_all(
-            "a",
-            href=True
-        ):
-
-            href = a["href"]
-
-
-            if ".pdf" not in href.lower():
-                continue
-
-
-            title = a.get_text(
-                " ",
-                strip=True
             )
 
-
-            lower = title.lower()
-
-
-            if "circular" in lower:
-                continue
-
-
-            date = extract_date(title)
-
-
-            if date:
-
-                notices.append({
-
-                    "title": title,
-
-                    "link": urljoin(
-                        url,
-                        href
-                    ),
-
-                    "date": date
-
-                })
+        })
 
 
 
@@ -222,23 +156,12 @@ def latest(url):
         return None
 
 
+    # Website order অনুযায়ী প্রথম Notice
+    return notices[0]
 
-    notices.sort(
-        key=lambda x:x["date"],
-        reverse=True
-    )
+    
 
-
-    newest = notices[0]
-
-
-    return {
-
-        "title": newest["title"],
-
-        "link": newest["link"]
-
-    }
+    
 
 
 
