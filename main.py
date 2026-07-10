@@ -1,6 +1,8 @@
 import os
 import json
 import requests
+import re
+from datetime import datetime
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
@@ -10,20 +12,28 @@ SITES = {
 }
 
 
-BOT_TOKEN ="8735006573:AAGacSF8BTuTPvVpO9P2hmOqos93XBzH3GY"
-CHAT_ID =["6382850126"]
+BOT_TOKEN = "8735006573:AAGacSF8BTuTPvVpO9P2hmOqos93XBzH3GY"
+CHAT_ID = "6382850126"
+
 
 LAST = "last_notice.json"
+
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
 
+
 def load():
 
     if os.path.exists(LAST):
-        with open(LAST, "r", encoding="utf-8") as f:
+
+        with open(
+            LAST,
+            "r",
+            encoding="utf-8"
+        ) as f:
             return json.load(f)
 
     return {}
@@ -32,7 +42,12 @@ def load():
 
 def save(data):
 
-    with open(LAST, "w", encoding="utf-8") as f:
+    with open(
+        LAST,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
         json.dump(
             data,
             f,
@@ -44,7 +59,11 @@ def save(data):
 
 def telegram(message):
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    url = (
+        f"https://api.telegram.org/"
+        f"bot{BOT_TOKEN}/sendMessage"
+    )
+
 
     r = requests.post(
         url,
@@ -54,6 +73,7 @@ def telegram(message):
         },
         timeout=30
     )
+
 
     print(r.json())
 
@@ -67,7 +87,9 @@ def latest(url):
         timeout=30
     )
 
+
     r.raise_for_status()
+
 
     soup = BeautifulSoup(
         r.text,
@@ -75,13 +97,24 @@ def latest(url):
     )
 
 
-    # Notice list থেকে প্রথম PDF খোঁজা
+    notices = []
+
+
+    # Table থেকে Notice খোঁজা
     for row in soup.find_all("tr"):
 
-        link = row.find("a", href=True)
+
+        link = row.find(
+            "a",
+            href=True
+        )
+
 
         if not link:
             continue
+
+
+        href = link["href"]
 
 
         title = row.get_text(
@@ -90,64 +123,116 @@ def latest(url):
         )
 
 
-        href = link["href"]
-
-
-        # Circular বাদ
-        if "circular" in title.lower():
+        if ".pdf" not in href.lower():
             continue
 
 
-        if ".pdf" in href.lower():
-
-            return {
-                "title": title,
-                "link": urljoin(url, href)
-            }
+        text = title.lower()
 
 
-    # fallback: যদি table না থাকে
-    for link in soup.find_all("a", href=True):
+        # Circular বাদ
+        if "circular" in text:
+            continue
 
-        href = link["href"]
 
-        title = link.get_text(
-            " ",
-            strip=True
+        # Notice ছাড়া বাদ
+        if "notice" not in text:
+            continue
+
+
+
+        # তারিখ খোঁজা
+        dates = re.findall(
+            r'(\d{1,2}[-/]\d{1,2}[-/]\d{4})',
+            title
         )
 
 
-        if ".pdf" in href.lower():
-
-            if "circular" in title.lower():
-                continue
-
-            return {
-                "title": title or "SHED Notice",
-                "link": urljoin(url, href)
-            }
+        if not dates:
+            continue
 
 
-    return None
+
+        try:
+
+            date = datetime.strptime(
+                dates[0].replace("/", "-"),
+                "%d-%m-%Y"
+            )
+
+
+        except:
+
+            continue
+
+
+
+        notices.append({
+
+            "title": title,
+
+            "link": urljoin(
+                url,
+                href
+            ),
+
+            "date": date
+
+        })
+
+
+
+    if not notices:
+
+        return None
+
+
+
+    # নতুন তারিখ আগে
+    notices.sort(
+        key=lambda x: x["date"],
+        reverse=True
+    )
+
+
+    notice = notices[0]
+
+
+    return {
+
+        "title": notice["title"],
+
+        "link": notice["link"]
+
+    }
 
 
 
 def main():
 
-    print("SHED Notice Checker Started")
+
+    print(
+        "SHED Notice Checker Started"
+    )
 
 
     last = load()
 
 
+
     for name, url in SITES.items():
+
 
         notice = latest(url)
 
 
+
         if notice is None:
 
-            print("Notice not found")
+            print(
+                "No Notice Found"
+            )
+
             continue
 
 
@@ -156,22 +241,35 @@ def main():
 
 
             message = (
-                f"🔔 নতুন Notice ({name})\n\n"
+
+                f"🔔 New Notice ({name})\n\n"
+
                 f"📌 {notice['title']}\n\n"
+
                 f"🔗 {notice['link']}"
+
             )
 
 
             telegram(message)
 
+
+
             last[name] = notice["link"]
 
-            print("Telegram Sent")
+
+            print(
+                "Telegram Sent"
+            )
 
 
         else:
 
-            print("No New Notice")
+
+            print(
+                "No New Notice"
+            )
+
 
 
     save(last)
@@ -179,4 +277,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
