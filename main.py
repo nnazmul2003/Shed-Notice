@@ -79,6 +79,30 @@ def telegram(message):
 
 
 
+def get_date(text):
+
+    dates = re.findall(
+        r'(\d{1,2}[-/]\d{1,2}[-/]\d{4})',
+        text
+    )
+
+    if not dates:
+        return None
+
+
+    try:
+
+        return datetime.strptime(
+            dates[0].replace("/", "-"),
+            "%d-%m-%Y"
+        )
+
+    except:
+
+        return None
+
+
+
 def latest(url):
 
     r = requests.get(
@@ -86,7 +110,6 @@ def latest(url):
         headers=HEADERS,
         timeout=30
     )
-
 
     r.raise_for_status()
 
@@ -100,9 +123,7 @@ def latest(url):
     notices = []
 
 
-    # Table থেকে Notice খোঁজা
     for row in soup.find_all("tr"):
-
 
         link = row.find(
             "a",
@@ -117,52 +138,51 @@ def latest(url):
         href = link["href"]
 
 
+        if ".pdf" not in href.lower():
+            continue
+
+
         title = row.get_text(
             " ",
             strip=True
         )
 
 
-        if ".pdf" not in href.lower():
-            continue
-
-
         text = title.lower()
 
 
-        # Circular বাদ
-        if "circular" in text:
-            continue
 
-
-        # Notice ছাড়া বাদ
-        if "notice" not in text:
-            continue
-
-
-
-        # তারিখ খোঁজা
-        dates = re.findall(
-            r'(\d{1,2}[-/]\d{1,2}[-/]\d{4})',
-            title
-        )
-
-
-        if not dates:
+        # শুধুমাত্র Notice
+        if (
+            "notice" not in text
+            and
+            "নোটিশ" not in text
+        ):
             continue
 
 
 
-        try:
+        # Circular/Notification বাদ
+        bad_words = [
+            "circular",
+            "notification",
+            "পরিপত্র",
+            "বিজ্ঞপ্তি"
+        ]
 
-            date = datetime.strptime(
-                dates[0].replace("/", "-"),
-                "%d-%m-%Y"
-            )
+
+        if any(
+            word in text
+            for word in bad_words
+        ):
+            continue
 
 
-        except:
 
+        date = get_date(title)
+
+
+        if not date:
             continue
 
 
@@ -190,26 +210,26 @@ def latest(url):
 
     # নতুন তারিখ আগে
     notices.sort(
-        key=lambda x: x["date"],
+        key=lambda x:x["date"],
         reverse=True
     )
 
 
-    notice = notices[0]
+    newest = notices[0]
 
 
     return {
 
-        "title": notice["title"],
+        "title": newest["title"],
 
-        "link": notice["link"]
+        "link": newest["link"]
 
     }
 
 
 
-def main():
 
+def main():
 
     print(
         "SHED Notice Checker Started"
@@ -219,15 +239,14 @@ def main():
     last = load()
 
 
-
-    for name, url in SITES.items():
+    for name,url in SITES.items():
 
 
         notice = latest(url)
 
 
 
-        if notice is None:
+        if not notice:
 
             print(
                 "No Notice Found"
@@ -240,7 +259,7 @@ def main():
         if last.get(name) != notice["link"]:
 
 
-            message = (
+            msg = (
 
                 f"🔔 New Notice ({name})\n\n"
 
@@ -251,8 +270,7 @@ def main():
             )
 
 
-            telegram(message)
-
+            telegram(msg)
 
 
             last[name] = notice["link"]
@@ -265,11 +283,9 @@ def main():
 
         else:
 
-
             print(
                 "No New Notice"
             )
-
 
 
     save(last)
