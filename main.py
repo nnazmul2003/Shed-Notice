@@ -1,14 +1,30 @@
+import os
+import time
+import threading
 import requests
 from bs4 import BeautifulSoup
-import os
+from flask import Flask
 
-# --- কনফিগারেশন ---
+# --- ডামি ফ্ল্যাঙ্ক সার্ভার (Render-কে লাইভ রাখার জন্য) ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running perfectly!"
+
+def run_server():
+    # Render অটোমেটিক PORT এনভায়রনমেন্ট ভেরিয়েবল দেয়, না থাকলে ৫০০০ পোর্টে চলবে
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 ডামি সার্ভার চালু হচ্ছে {port} পোর্টে...")
+    app.run(host="0.0.0.0", port=port)
+
+# --- আপনার আসল কনফিগারেশন ---
 URL = "https://shed.gov.bd/site/view/notices"
 TELEGRAM_TOKEN = "8735006573:AAGacSF8BTuTPvVpO9P2hmOqos93XBzH3GY"  # আপনার বটের টোকেন
 CHAT_ID = "6382850126"          # আপনার চ্যাট আইডি
 TRACK_FILE = "sent_notices.txt"
 
-# ফাইল চেক
+# ফাইল চেক ও লোড
 if os.path.exists(TRACK_FILE):
     with open(TRACK_FILE, "r", encoding="utf-8") as f:
         sent_notices = set(f.read().splitlines())
@@ -63,7 +79,7 @@ def check_recent_notice():
                     if link in sent_notices:
                         continue
                     
-                    # টেলিগ্রাম মেসেজ
+                    # টেলিগ্রাম মেসেজ ফরম্যাট
                     message = (
                         f"🔔 *নতুন নোটিশ প্রকাশিত হয়েছে!*\n\n"
                         f"📅 *প্রকাশের তারিখ:* {published_date}\n"
@@ -87,6 +103,23 @@ def check_recent_notice():
     except Exception as e:
         print(f"❌ ত্রুটি: {e}")
 
+# --- ব্যাকগ্রাউন্ড লুপ (যা ৩০ মিনিট পর পর নোটিশ চেক করবে) ---
+def bot_loop():
+    while True:
+        check_recent_notice()
+        print("😴 ৩০ মিনিটের জন্য ঘুমাচ্ছে...")
+        time.sleep(1800) # ১৮০০ সেকেন্ড = ৩০ মিনিট
+
 if __name__ == "__main__":
-    # GitHub Actions-এ কোডটি একবার রান হবে, চেক করবে, তারপর নিজে নিজেই বন্ধ হয়ে যাবে।
-    check_recent_notice()
+    # ১. প্রথমে ব্যাকগ্রাউন্ড থ্রেডে ডামি ফ্ল্যাঙ্ক সার্ভারটি চালু করি
+    # এতে করে Render পোর্ট কানেকশন পেয়ে যাবে এবং 'Live' স্ট্যাটাস দেখাবে
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True
+    server_thread.start()
+    
+    # সার্ভার পুরোপুরি শুরু হওয়ার জন্য ২ সেকেন্ড সময় দিচ্ছি
+    time.sleep(2)
+    
+    # ২. এবার মূল থ্রেডেই (Main Thread) বটের ইনফিনিট লুপটি চালিয়ে দিচ্ছি
+    # এতে করে স্ক্রিপ্টটি কখনো নিজে থেকে বন্ধ (Exit) হবে না
+    bot_loop()
